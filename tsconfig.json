@@ -1,4 +1,4 @@
-    {
+{
   "compilerOptions": {
     "sourceMap": true,
     "moduleResolution": "node",
@@ -6,7 +6,7 @@
     "target": "esnext",
     "lib": ["esnext", "dom"],
     "outDir": "./dist",
-    "strict": true,
+    "strict": false,
     "allowJs": false,
     "allowSyntheticDefaultImports": true,
     "downlevelIteration": true,
@@ -14,9 +14,5 @@
     "isolatedModules": false,
     "noEmit": false
   },
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }
-
-

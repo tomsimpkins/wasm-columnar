@@ -1,26 +1,39 @@
-import {MessageManager} from './MessageManager';
+import { ByteColumn } from "./ByteColumn";
+import { MessageManager } from "./MessageManager";
 
 let messageManager: MessageManager | null = null;
 
-function executeFunction<T extends MessageManager>(target: T, func: keyof T, args: any): void {
-    (target[func] as unknown as Function)(args);
+function executeFunction<T extends MessageManager>(
+  target: T,
+  func: keyof T,
+  args: any
+): void {
+  (target[func] as unknown as Function)(args);
 }
 
-self.addEventListener('message', e => {
-    const message = e.data || e;
+const sleep = (ms: number) =>
+  new Promise((res) => {
+    setTimeout(() => res(undefined), ms);
+  });
 
-    switch (message.type) {
-        case 'init':
-            messageManager = new MessageManager(message.args);
-            break;
+self.addEventListener("message", async (e) => {
+  const message = e.data || e;
 
-        case 'exec':
-            if (messageManager) {
-                executeFunction(messageManager, message.func, message.args);
-            }
-            break;
+  switch (message.type) {
+    case "init":
+      messageManager = new MessageManager(message.args);
+      break;
 
-        default:
-            break;
-    }
+    case "exec":
+      if (messageManager) {
+        // executeFunction(messageManager, message.func, message.args);
+        await sleep(5000);
+        postMessage("foobar");
+        console.log(ByteColumn.fromArray([1, 2, 3]));
+      }
+      break;
+
+    default:
+      break;
+  }
 });
