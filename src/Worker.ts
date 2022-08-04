@@ -17,15 +17,6 @@ self.addEventListener("message", async (e: MessageEvent<MessageData>) => {
 
       const data = makeData(itemCount, seed);
 
-      const strings = data.filter((v) => typeof v === "string");
-      console.time("strings encode special " + strings.length);
-      const encoded = new TextEncoder().encode(JSON.stringify(strings));
-      console.timeEnd("strings encode special " + strings.length);
-
-      console.time("strings decode special " + strings.length);
-      JSON.parse(new TextDecoder().decode(encoded));
-      console.timeEnd("strings decode special " + strings.length);
-
       fakeConsole.time("init byte column");
       const byteColumn = ByteColumn.fromArray(data);
       fakeConsole.timeEnd("init byte column");
