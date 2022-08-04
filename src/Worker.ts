@@ -1,11 +1,11 @@
-import { initTimings } from "./timings";
+import { initTimer } from "./timings";
 import { makeData } from "./makeData";
 import { ByteColumn } from "./ByteColumn";
 import { MessageData } from "./types";
 
 self.addEventListener("message", async (e: MessageEvent<MessageData>) => {
   console.log(e);
-  const fakeConsole = initTimings();
+  const fakeConsole = initTimer();
   const message = e.data;
 
   switch (message.type) {

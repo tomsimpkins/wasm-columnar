@@ -1,4 +1,4 @@
-import { initTimings } from "./timings";
+import { initTimer } from "./timings";
 import { isEqual } from "./assert";
 import { makeData } from "./makeData";
 import { ByteColumn } from "./ByteColumn";
@@ -18,7 +18,7 @@ async function main(): Promise<void> {
       case "roundTrip": {
         const postMessageTime = Date.now() - evt.data.messageSendTime;
 
-        const fakeConsole = initTimings();
+        const fakeConsole = initTimer();
         fakeConsole.time("reify column");
         const byteColumn = ByteColumn.fromColumnBytes(evt.data.bytePayload);
         const reified = byteColumn.reify();
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
       }
       case "roundTripJson": {
         const postMessageTime = Date.now() - evt.data.messageSendTime;
-        const fakeConsole = initTimings();
+        const fakeConsole = initTimer();
         fakeConsole.time("json parse");
         const revived = JSON.parse(evt.data.clonedData);
         fakeConsole.timeEnd("json parse");
