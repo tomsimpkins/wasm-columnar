@@ -15,13 +15,13 @@ export const makeData = (length: number, seed: number) => {
   const res: PropertyValue[] = Array.from({ length }, () => {
     const r = rng();
     switch (true) {
-      case false && r < 0.25: {
+      case true || r < 0.2: {
         return rng() < 0.5;
       }
-      case false && r < 0.5: {
+      case r < 0.4: {
         return rng() * 100000 - 50000;
       }
-      case true || r < 0.75: {
+      case r < 0.6: {
         return (
           rng().toString(32).substr(2) +
           rng().toString(32).substr(2) +
@@ -31,11 +31,14 @@ export const makeData = (length: number, seed: number) => {
           rng().toString(32).substr(2)
         );
       }
-      case r < 1: {
+      case r < 0.8: {
         const future = new Date(2050, 10, 10).getTime();
         const past = new Date(1902, 5, 1).getTime();
 
         return new Date(rng() * (future - past) + past);
+      }
+      default: {
+        return undefined;
       }
     }
   });
