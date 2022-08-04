@@ -1,41 +1,14 @@
 import { decodeDate, encodeDate } from "./dateUtils";
 import { utf8DecodeJs, utf8EncodeJs } from "./stringUtils";
+import { PropertyValue, PropertyValueType } from "./types";
 
 // Column must give access by index
 // Must give reified column quickly
 // Must have fast serializable representation
 
-const promisePostMessage = (() => {
-  const channel = new MessageChannel();
-  channel.port1.start();
-  channel.port2.start();
-
-  let callback: undefined | ((x: any) => void);
-  channel.port2.addEventListener("message", (msg) => {
-    callback!(msg.data);
-    callback = undefined;
-  });
-
-  return <T>(data: T, transfer: Transferable[] = []) => {
-    return new Promise<T>((res) => {
-      callback = res;
-      channel.port1.postMessage(data, transfer);
-    });
-  };
-})();
-
-type PropertyValue = string | number | Date | boolean | undefined;
-enum PropertyValueType {
-  Undefined, // important undefined is 0
-  Date,
-  String,
-  Number,
-  Boolean,
-}
-
 const createColumnBytes = (length: number): ColumnBytes => {
   return {
-    stringBuffer: new Uint8Array(length * 17),
+    stringBuffer: new Uint8Array(length * 50),
     buffer: new ArrayBuffer(length + 4 * length + 8 * length), // types + offsets + values
     byteOffset: 0,
     stringOffset: 0,
@@ -297,88 +270,6 @@ export class ByteColumn {
     return this.valueView.getUint8(this.offsetsView.getUint32(index * 4)) > 0;
   }
 }
-
-const makeData = (length: number) => {
-  const res: PropertyValue[] = Array.from({ length }, () => {
-    const r = Math.random();
-    switch (true) {
-      case r < 0.25: {
-        return Math.random() < 0.5;
-      }
-      case r < 0.5: {
-        return Math.random() * 100000 - 50000;
-      }
-      case r < 0.75: {
-        return (
-          Math.random().toString(32).substr(2) +
-          Math.random().toString(32).substr(2) +
-          Math.random().toString(32).substr(2) +
-          Math.random().toString(32).substr(2) +
-          Math.random().toString(32).substr(2) +
-          Math.random().toString(32).substr(2)
-        );
-      }
-      case r < 1: {
-        const future = new Date(2050, 10, 10).getTime();
-        const past = new Date(1902, 5, 1).getTime();
-
-        return new Date(Math.random() * (future - past) + past);
-      }
-    }
-  });
-
-  return res;
-};
-
-const sleep = (ms: number) =>
-  new Promise((res) =>
-    setTimeout(() => {
-      res(undefined);
-    }, ms)
-  );
-
-const assertEqual = (xs: PropertyValue[], ys: PropertyValue[]) => {
-  if (!(xs.length === ys.length)) {
-    throw new Error(`lengths differ ${xs.length}, ${ys.length}`);
-  }
-
-  for (let i = 0; i < xs.length; i++) {
-    const x = xs[i];
-    const y = ys[i];
-
-    const xType = ByteColumn.getValueType(x);
-    const yType = ByteColumn.getValueType(y);
-    if (xType !== yType) {
-      throw new Error(`item ${i} differs in type`);
-    }
-
-    switch (xType) {
-      case PropertyValueType.String:
-      case PropertyValueType.Number:
-      case PropertyValueType.Boolean:
-      case PropertyValueType.Undefined: {
-        if (x !== y) {
-          throw new Error(`values differ at ${i}, x:${x} y:${y}`);
-        }
-        break;
-      }
-      case PropertyValueType.Date: {
-        const xDate = x as Date;
-        const yDate = y as Date;
-        if (
-          !(
-            xDate.getUTCFullYear() === yDate.getUTCFullYear() &&
-            xDate.getUTCMonth() === yDate.getUTCMonth() &&
-            xDate.getUTCDate() === yDate.getUTCDate()
-          )
-        ) {
-          throw new Error(`values differ at ${i}, x:${x} y:${y}`);
-        }
-        break;
-      }
-    }
-  }
-};
 
 // export const execTests = async () => {
 //   const s0 = Date.now();

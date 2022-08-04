@@ -1,37 +1,89 @@
+import { initTimings } from "./timings";
+import { makeData } from "./makeData";
 import { ByteColumn } from "./ByteColumn";
-import { MessageManager } from "./MessageManager";
+import { MessageData } from "./types";
 
-let messageManager: MessageManager | null = null;
-
-function executeFunction<T extends MessageManager>(
-  target: T,
-  func: keyof T,
-  args: any
-): void {
-  (target[func] as unknown as Function)(args);
-}
-
-const sleep = (ms: number) =>
-  new Promise((res) => {
-    setTimeout(() => res(undefined), ms);
-  });
-
-self.addEventListener("message", async (e) => {
-  const message = e.data || e;
+self.addEventListener("message", async (e: MessageEvent<MessageData>) => {
+  console.log(e);
+  const fakeConsole = initTimings();
+  const message = e.data;
 
   switch (message.type) {
     case "init":
-      messageManager = new MessageManager(message.args);
       break;
 
-    case "exec":
-      if (messageManager) {
-        // executeFunction(messageManager, message.func, message.args);
-        await sleep(5000);
-        postMessage("foobar");
-        console.log(ByteColumn.fromArray([1, 2, 3]));
-      }
+    case "roundTrip": {
+      const [{ itemCount, seed }] = message.args;
+
+      const data = makeData(itemCount, seed);
+
+      const strings = data.filter((v) => typeof v === "string");
+      console.time("strings encode special " + strings.length);
+      const encoded = new TextEncoder().encode(JSON.stringify(strings));
+      console.timeEnd("strings encode special " + strings.length);
+
+      console.time("strings decode special " + strings.length);
+      JSON.parse(new TextDecoder().decode(encoded));
+      console.timeEnd("strings decode special " + strings.length);
+
+      fakeConsole.time("init byte column");
+      const byteColumn = ByteColumn.fromArray(data);
+      fakeConsole.timeEnd("init byte column");
+
+      fakeConsole.time("get column bytes");
+      const bytePayload = byteColumn.toColumnBytes();
+      fakeConsole.timeEnd("get column bytes");
+
+      postMessage(
+        {
+          type: message.type,
+          bytePayload,
+          timings: fakeConsole.timings,
+          messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+        },
+        {
+          transfer: [bytePayload.buffer, bytePayload.stringBuffer],
+        }
+      );
+
       break;
+    }
+
+    case "roundTripRaw": {
+      const [{ itemCount, seed }] = message.args;
+
+      const data = makeData(itemCount, seed);
+
+      fakeConsole.time("slice raw data");
+      const clonedData = data.slice();
+      fakeConsole.timeEnd("slice raw data");
+
+      postMessage({
+        type: message.type,
+        clonedData,
+        timings: fakeConsole.timings,
+        messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+      });
+      break;
+    }
+
+    case "roundTripJson": {
+      const [{ itemCount, seed }] = message.args;
+
+      const data = makeData(itemCount, seed);
+
+      fakeConsole.time("json stringify");
+      const clonedData = JSON.stringify(data);
+      fakeConsole.timeEnd("json stringify");
+
+      postMessage({
+        type: message.type,
+        clonedData,
+        timings: fakeConsole.timings,
+        messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+      });
+      break;
+    }
 
     default:
       break;
