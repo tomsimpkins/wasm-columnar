@@ -44,14 +44,12 @@ export const assertEqual = (xs: PropertyValue[], ys: PropertyValue[]) => {
   }
 };
 
-export const isEqual = (
-  xs: PropertyValue[],
-  ys: PropertyValue[]
-): string | true => {
+export const isEqual = (xs: PropertyValue[], ys: PropertyValue[]): boolean => {
   try {
     assertEqual(xs, ys);
     return true;
   } catch (e) {
-    return e.message;
+    console.log("isEqual", e.message);
+    return false;
   }
 };
