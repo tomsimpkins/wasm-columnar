@@ -3,7 +3,7 @@ import { isEqual } from "./assert";
 import { makeData } from "./makeData";
 import { ByteColumn } from "./ByteColumn";
 import WebWorker from "web-worker:./Worker.ts";
-import { MessageData } from "./types";
+import { RequestMessageData, PropertyValue } from "./types";
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((res) => setTimeout(() => res(undefined), ms));
@@ -14,78 +14,66 @@ async function main(): Promise<void> {
   const worker = new WebWorker();
 
   worker.addEventListener("message", (evt) => {
+    const postMessageTime = Date.now() - evt.data.messageSendTime;
+
+    const timer = initTimer();
+
+    let result: PropertyValue[] = [];
     switch (evt.data.type) {
       case "roundTrip": {
-        const postMessageTime = Date.now() - evt.data.messageSendTime;
-
-        const fakeConsole = initTimer();
-        fakeConsole.time("reify column");
-        const byteColumn = ByteColumn.fromColumnBytes(evt.data.bytePayload);
+        timer.time("reify column");
+        const byteColumn = ByteColumn.fromColumnBytes(evt.data.payload);
         const reified = byteColumn.reify();
-        fakeConsole.timeEnd("reify column");
+        timer.timeEnd("reify column");
 
-        const data = makeData(itemCount, seed);
-        console.log("equal", isEqual(data, reified));
-        const allTimings = Object.assign(
-          fakeConsole.timings,
-          evt.data.timings,
-          {
-            postMessageTime,
-          }
-        );
-        const totalTime = Object.values(allTimings).reduce((a, b) => a + b);
+        result = reified;
 
-        console.log("timings", allTimings, totalTime);
         break;
       }
+
       case "roundTripRaw": {
-        const postMessageTime = Date.now() - evt.data.messageSendTime;
-        const allTimings = Object.assign(evt.data.timings, { postMessageTime });
-        const totalTime = Object.values(allTimings).reduce((a, b) => a + b);
-
-        console.log("timings", evt.data.timings, totalTime);
+        result = evt.data.payload;
         break;
       }
-      case "roundTripJson": {
-        const postMessageTime = Date.now() - evt.data.messageSendTime;
-        const fakeConsole = initTimer();
-        fakeConsole.time("json parse");
-        const revived = JSON.parse(evt.data.clonedData);
-        fakeConsole.timeEnd("json parse");
-        const allTimings = Object.assign(
-          evt.data.timings,
-          fakeConsole.timings,
-          { postMessageTime }
-        );
-        const totalTime = Object.values(allTimings).reduce((a, b) => a + b);
 
-        console.log("timings", evt.data.timings, totalTime);
+      case "roundTripJson": {
+        timer.time("json parse");
+        const revived = JSON.parse(evt.data.payload);
+        timer.timeEnd("json parse");
+        result = revived;
         break;
       }
     }
+
+    const allTimings = Object.assign(evt.data.timings, timer.timings, {
+      postMessageTime,
+    });
+    const totalTime = Object.values(allTimings).reduce((a, b) => a + b);
+
+    const data = makeData(itemCount, seed);
+    isEqual(data, result);
+
+    console.log("timings", evt.data.timings, totalTime);
   });
-
-  const initMessage: MessageData = {
-    type: "init",
-  };
+  const initMessage: RequestMessageData = { type: "init" };
   worker.postMessage(initMessage);
-  await sleep(1000);
 
-  const goMessage: MessageData = {
+  await sleep(1000);
+  const goMessage: RequestMessageData = {
     type: "roundTrip",
     args: [{ itemCount, seed }],
   };
   worker.postMessage(goMessage);
   await sleep(1000);
 
-  const baselineMessage: MessageData = {
+  const baselineMessage: RequestMessageData = {
     type: "roundTripRaw",
     args: [{ itemCount, seed }],
   };
   worker.postMessage(baselineMessage);
   await sleep(1000);
 
-  const jsonMessage: MessageData = {
+  const jsonMessage: RequestMessageData = {
     type: "roundTripJson",
     args: [{ itemCount, seed }],
   };

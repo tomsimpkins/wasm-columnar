@@ -1,82 +1,75 @@
-import { initTimer } from "./timings";
+import { initTimer, Timer } from "./timings";
 import { makeData } from "./makeData";
 import { ByteColumn } from "./ByteColumn";
-import { MessageData } from "./types";
+import { RequestMessageData } from "./types";
 
-self.addEventListener("message", async (e: MessageEvent<MessageData>) => {
-  console.log(e);
-  const fakeConsole = initTimer();
-  const message = e.data;
+self.addEventListener(
+  "message",
+  async (e: MessageEvent<RequestMessageData>) => {
+    if (e.data.type === "init") {
+      return;
+    }
 
-  switch (message.type) {
-    case "init":
-      break;
+    const timer = initTimer();
+    const message = e.data;
+    const [{ itemCount, seed }] = message.args;
+    const data = makeData(itemCount, seed);
 
-    case "roundTrip": {
-      const [{ itemCount, seed }] = message.args;
+    switch (message.type) {
+      case "roundTrip": {
+        timer.time("init byte column");
+        const byteColumn = ByteColumn.fromArray(data);
+        timer.timeEnd("init byte column");
 
-      const data = makeData(itemCount, seed);
+        timer.time("get column bytes");
+        const bytePayload = byteColumn.toColumnBytes();
+        timer.timeEnd("get column bytes");
 
-      fakeConsole.time("init byte column");
-      const byteColumn = ByteColumn.fromArray(data);
-      fakeConsole.timeEnd("init byte column");
+        postMessage(
+          {
+            type: message.type,
+            payload: bytePayload,
+            timings: timer.timings,
+            messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+          },
+          {
+            transfer: [bytePayload.buffer, bytePayload.stringBuffer],
+          }
+        );
 
-      fakeConsole.time("get column bytes");
-      const bytePayload = byteColumn.toColumnBytes();
-      fakeConsole.timeEnd("get column bytes");
+        break;
+      }
 
-      postMessage(
-        {
+      case "roundTripRaw": {
+        timer.time("slice raw data");
+        const clonedData = data.slice();
+        timer.timeEnd("slice raw data");
+
+        postMessage({
           type: message.type,
-          bytePayload,
-          timings: fakeConsole.timings,
+          payload: clonedData,
+          timings: timer.timings,
           messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
-        },
-        {
-          transfer: [bytePayload.buffer, bytePayload.stringBuffer],
-        }
-      );
+        });
+        break;
+      }
 
-      break;
+      case "roundTripJson": {
+        timer.time("json stringify");
+        const clonedData = JSON.stringify(data);
+        timer.timeEnd("json stringify");
+
+        postMessage({
+          type: message.type,
+          payload: clonedData,
+          timings: timer.timings,
+          messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+        });
+        break;
+      }
+
+      default:
+        break;
     }
-
-    case "roundTripRaw": {
-      const [{ itemCount, seed }] = message.args;
-
-      const data = makeData(itemCount, seed);
-
-      fakeConsole.time("slice raw data");
-      const clonedData = data.slice();
-      fakeConsole.timeEnd("slice raw data");
-
-      postMessage({
-        type: message.type,
-        clonedData,
-        timings: fakeConsole.timings,
-        messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
-      });
-      break;
-    }
-
-    case "roundTripJson": {
-      const [{ itemCount, seed }] = message.args;
-
-      const data = makeData(itemCount, seed);
-
-      fakeConsole.time("json stringify");
-      const clonedData = JSON.stringify(data);
-      fakeConsole.timeEnd("json stringify");
-
-      postMessage({
-        type: message.type,
-        clonedData,
-        timings: fakeConsole.timings,
-        messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
-      });
-      break;
-    }
-
-    default:
-      break;
   }
-});
+);
