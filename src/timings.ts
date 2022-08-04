@@ -1,4 +1,4 @@
-export const initTimings = () => {
+export const initTimer = (): Timer => {
   const timings = {};
 
   return {
@@ -10,4 +10,10 @@ export const initTimings = () => {
     },
     timings,
   };
+};
+
+export type Timer = {
+  time: (key: string) => void;
+  timeEnd: (key: string) => void;
+  timings: Record<string, number>;
 };
