@@ -2,7 +2,7 @@
   "name": "wasm-columnar",
   "version": "0.0.1",
   "description": "Example of using RollupJS + TypeScript + WebWorkers",
-  "author": "Dario Segura",
+  "author": "Tom Simpkins",
   "license": "MIT",
   "entry": "src/index.ts",
   "main": "dist/next/index.js",
