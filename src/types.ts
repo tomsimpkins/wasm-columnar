@@ -9,7 +9,9 @@ export enum PropertyValueType {
   Boolean,
 }
 
-type BaseRequestMessageData = { args: [{ itemCount: number; seed: number }] };
+type BaseRequestMessageData = {
+  args: [{ itemCount: number; seed: number; types?: PropertyValueType[] }];
+};
 export type RequestMessageData =
   | (BaseRequestMessageData &
       (
@@ -28,7 +30,22 @@ type BaseResponseMessageData = {
 };
 export type ResponseMessageData = BaseResponseMessageData &
   (
-    | { type: "roundTrip"; args: [{ itemCount: number; seed: number }] }
-    | { type: "roundTripRaw"; args: [{ itemCount: number; seed: number }] }
-    | { type: "roundTripJson"; args: [{ itemCount: number; seed: number }] }
+    | {
+        type: "roundTrip";
+        args: [
+          { itemCount: number; seed: number; types?: PropertyValueType[] }
+        ];
+      }
+    | {
+        type: "roundTripRaw";
+        args: [
+          { itemCount: number; seed: number; types?: PropertyValueType[] }
+        ];
+      }
+    | {
+        type: "roundTripJson";
+        args: [
+          { itemCount: number; seed: number; types?: PropertyValueType[] }
+        ];
+      }
   );

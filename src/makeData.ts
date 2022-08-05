@@ -1,4 +1,4 @@
-import { PropertyValue } from "./types";
+import { PropertyValue, PropertyValueType } from "./types";
 
 function mulberry32(a) {
   return function () {
@@ -9,19 +9,31 @@ function mulberry32(a) {
   };
 }
 
-export const makeData = (length: number, seed: number) => {
+export const makeData = (
+  length: number,
+  seed: number,
+  types?: PropertyValueType[]
+) => {
+  if (types === undefined || types.length === 0) {
+    types = Object.values(PropertyValueType).filter(
+      (k): k is PropertyValueType => typeof k !== "string"
+    );
+  }
+
   const rng = mulberry32(seed);
 
   const res: PropertyValue[] = Array.from({ length }, () => {
     const r = rng();
-    switch (true) {
-      case r < 0.2: {
+    const type = types[(r * types.length) | 0];
+
+    switch (type) {
+      case PropertyValueType.Boolean: {
         return rng() < 0.5;
       }
-      case r < 0.4: {
+      case PropertyValueType.Number: {
         return rng() * 100000 - 50000;
       }
-      case r < 0.6: {
+      case PropertyValueType.String: {
         return (
           rng().toString(32).substr(2) +
           rng().toString(32).substr(2) +
@@ -31,14 +43,17 @@ export const makeData = (length: number, seed: number) => {
           rng().toString(32).substr(2)
         );
       }
-      case r < 0.8: {
+      case PropertyValueType.Date: {
         const future = new Date(2050, 10, 10).getTime();
         const past = new Date(1902, 5, 1).getTime();
 
         return new Date(rng() * (future - past) + past);
       }
-      default: {
+      case PropertyValueType.Undefined: {
         return undefined;
+      }
+      default: {
+        throw new Error("Could not generate value");
       }
     }
   });

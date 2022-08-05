@@ -3,13 +3,18 @@ import { isEqual } from "./assert";
 import { makeData } from "./makeData";
 import { ByteColumn } from "./ByteColumn";
 import WebWorker from "web-worker:./Worker.ts";
-import { RequestMessageData, PropertyValue } from "./types";
+import { RequestMessageData, PropertyValue, PropertyValueType } from "./types";
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((res) => setTimeout(() => res(undefined), ms));
 
 const itemCount = 500000;
 const seed = 5;
+const types: PropertyValueType[] = [
+  PropertyValueType.Boolean,
+  PropertyValueType.Number,
+];
+
 async function main(): Promise<void> {
   const worker = new WebWorker();
 
@@ -51,10 +56,10 @@ async function main(): Promise<void> {
     });
     const totalTime = Object.values(allTimings).reduce((a, b) => a + b);
 
-    const data = makeData(itemCount, seed);
+    const data = makeData(itemCount, seed, types);
     isEqual(data, result);
 
-    console.log("timings", allTimings, totalTime);
+    console.log("timings", evt.data.type, allTimings, totalTime);
   });
 
   const initMessage: RequestMessageData = { type: "init" };
@@ -63,21 +68,21 @@ async function main(): Promise<void> {
   await sleep(1000);
   const jsonMessage: RequestMessageData = {
     type: "roundTripJson",
-    args: [{ itemCount, seed }],
+    args: [{ itemCount, seed, types }],
   };
   worker.postMessage(jsonMessage);
 
   await sleep(1000);
   const byteColumnMessage: RequestMessageData = {
     type: "roundTrip",
-    args: [{ itemCount, seed }],
+    args: [{ itemCount, seed, types }],
   };
   worker.postMessage(byteColumnMessage);
 
   await sleep(1000);
   const baselineMessage: RequestMessageData = {
     type: "roundTripRaw",
-    args: [{ itemCount, seed }],
+    args: [{ itemCount, seed, types }],
   };
   worker.postMessage(baselineMessage);
 }

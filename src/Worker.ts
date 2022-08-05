@@ -12,8 +12,8 @@ self.addEventListener(
 
     const timer = initTimer();
     const message = e.data;
-    const [{ itemCount, seed }] = message.args;
-    const data = makeData(itemCount, seed);
+    const [{ itemCount, seed, types }] = message.args;
+    const data = makeData(itemCount, seed, types);
 
     switch (message.type) {
       case "roundTrip": {
