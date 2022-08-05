@@ -10,10 +10,7 @@ const sleep = (ms: number): Promise<void> =>
 
 const itemCount = 500000;
 const seed = 5;
-const types: PropertyValueType[] = [
-  PropertyValueType.Boolean,
-  PropertyValueType.Number,
-];
+const types: PropertyValueType[] = [PropertyValueType.Number];
 
 async function main(): Promise<void> {
   const worker = new WebWorker();
