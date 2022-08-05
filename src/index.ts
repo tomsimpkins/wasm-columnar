@@ -56,6 +56,7 @@ async function main(): Promise<void> {
 
     console.log("timings", allTimings, totalTime);
   });
+
   const initMessage: RequestMessageData = { type: "init" };
   worker.postMessage(initMessage);
 
@@ -67,11 +68,11 @@ async function main(): Promise<void> {
   worker.postMessage(jsonMessage);
 
   await sleep(1000);
-  const goMessage: RequestMessageData = {
+  const byteColumnMessage: RequestMessageData = {
     type: "roundTrip",
     args: [{ itemCount, seed }],
   };
-  worker.postMessage(goMessage);
+  worker.postMessage(byteColumnMessage);
 
   await sleep(1000);
   const baselineMessage: RequestMessageData = {
