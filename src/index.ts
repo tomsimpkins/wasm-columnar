@@ -14,9 +14,10 @@ async function main(): Promise<void> {
   const worker = new WebWorker();
 
   worker.addEventListener("message", (evt) => {
-    const postMessageTime = Date.now() - evt.data.messageSendTime;
-
     const timer = initTimer();
+    timer.time("get postmessage time");
+    const postMessageTime = Date.now() - evt.data.messageSendTime;
+    timer.timeEnd("get postmessage time");
 
     let result: PropertyValue[] = [];
     switch (evt.data.type) {
@@ -53,10 +54,17 @@ async function main(): Promise<void> {
     const data = makeData(itemCount, seed);
     isEqual(data, result);
 
-    console.log("timings", evt.data.timings, totalTime);
+    console.log("timings", allTimings, totalTime);
   });
   const initMessage: RequestMessageData = { type: "init" };
   worker.postMessage(initMessage);
+
+  await sleep(1000);
+  const jsonMessage: RequestMessageData = {
+    type: "roundTripJson",
+    args: [{ itemCount, seed }],
+  };
+  worker.postMessage(jsonMessage);
 
   await sleep(1000);
   const goMessage: RequestMessageData = {
@@ -64,20 +72,13 @@ async function main(): Promise<void> {
     args: [{ itemCount, seed }],
   };
   worker.postMessage(goMessage);
-  await sleep(1000);
 
+  await sleep(1000);
   const baselineMessage: RequestMessageData = {
     type: "roundTripRaw",
     args: [{ itemCount, seed }],
   };
   worker.postMessage(baselineMessage);
-  await sleep(1000);
-
-  const jsonMessage: RequestMessageData = {
-    type: "roundTripJson",
-    args: [{ itemCount, seed }],
-  };
-  worker.postMessage(jsonMessage);
 }
 
 window.addEventListener("DOMContentLoaded", () => {

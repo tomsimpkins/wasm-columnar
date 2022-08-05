@@ -15,13 +15,13 @@ export const makeData = (length: number, seed: number) => {
   const res: PropertyValue[] = Array.from({ length }, () => {
     const r = rng();
     switch (true) {
-      case true || r < 0.2: {
+      case r < 0.2: {
         return rng() < 0.5;
       }
-      case r < 0.4: {
+      case true || r < 0.4: {
         return rng() * 100000 - 50000;
       }
-      case r < 0.6: {
+      case true || r < 0.6: {
         return (
           rng().toString(32).substr(2) +
           rng().toString(32).substr(2) +
