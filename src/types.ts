@@ -18,6 +18,7 @@ export type RequestMessageData =
         | { type: "roundTrip" }
         | { type: "roundTripRaw" }
         | { type: "roundTripJson" }
+        | { type: "roundTripDict" }
       ))
   | InitMessage;
 
@@ -32,20 +33,14 @@ export type ResponseMessageData = BaseResponseMessageData &
   (
     | {
         type: "roundTrip";
-        args: [
-          { itemCount: number; seed: number; types?: PropertyValueType[] }
-        ];
       }
     | {
         type: "roundTripRaw";
-        args: [
-          { itemCount: number; seed: number; types?: PropertyValueType[] }
-        ];
       }
     | {
         type: "roundTripJson";
-        args: [
-          { itemCount: number; seed: number; types?: PropertyValueType[] }
-        ];
+      }
+    | {
+        type: "roundTripDict";
       }
   );
