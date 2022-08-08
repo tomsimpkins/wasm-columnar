@@ -6,6 +6,8 @@ import { PropertyValue, PropertyValueType } from "./types";
 // Must give reified column quickly
 // Must have fast serializable representation
 
+const separator = String.fromCodePoint(0xff);
+
 const createColumnBytes = (length: number): ColumnBytes => {
   return {
     stringBuffer: new Uint8Array(length * 50),
@@ -391,7 +393,7 @@ export class BatchByteColumn extends ByteColumn {
 
   toColumnBytes(): ColumnBytes {
     const r = this.encoder.encodeInto(
-      this.encodeCache.join("|"),
+      this.encodeCache.join(separator),
       this.stringEncoded
     );
 
@@ -409,17 +411,15 @@ export class BatchByteColumn extends ByteColumn {
   // byte offsets encoding
   setString(index: number, value: string) {
     const {
-      stringEncoded,
-      stringByteOffset: stringByteStart,
       valueByteOffset: valueByteStart,
       offsetsView,
       valueView,
       typesView,
-      stringsView,
+      encodeCache,
       stringCount,
     } = this;
 
-    this.encodeCache[this.stringCount] = value;
+    encodeCache[stringCount] = value;
 
     valueView.setUint32(valueByteStart, stringCount | 0);
     offsetsView.setUint32(index * 4, valueByteStart | 0);
@@ -430,20 +430,14 @@ export class BatchByteColumn extends ByteColumn {
   }
 
   getString(index: number): string {
-    const { stringsView, stringEncoded, valueView: view, offsetsView } = this;
+    const { stringEncoded, valueView: view, offsetsView } = this;
     const valueIndex = offsetsView.getUint32(index * 4);
     const stringIndex = view.getUint32(valueIndex);
 
     if (!this.decodeCache) {
-      this.decodeCache = this.decoder.decode(stringEncoded).split("|");
+      this.decodeCache = this.decoder.decode(stringEncoded).split(separator);
     }
 
     return this.decodeCache[stringIndex];
-  }
-}
-
-export class Foobar extends ByteColumn {
-  setString(index: number, value: string) {
-    return super.setString(index, value);
   }
 }
