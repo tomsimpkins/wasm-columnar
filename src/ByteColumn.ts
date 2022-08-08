@@ -61,9 +61,9 @@ export class ByteColumn {
   }
 
   reify(): PropertyValue[] {
-    const { getValue, reified, length } = this;
+    const { reified, length } = this;
     for (let i = 0; i < length; i++) {
-      reified[i] = getValue(i);
+      reified[i] = this.getValue(i);
     }
 
     return reified;
@@ -81,17 +81,19 @@ export class ByteColumn {
     }
   }
 
-  private byteOffset: number;
-  private stringOffset: number;
-  private length: number;
+  protected byteOffset: number;
+  protected stringOffset: number;
+  protected length: number;
 
-  private buffer: ArrayBuffer;
-  private valueView: DataView;
-  private typesView: DataView;
-  private offsetsView: DataView;
+  protected buffer: ArrayBuffer;
+  protected valueView: DataView;
+  protected typesView: DataView;
+  protected offsetsView: DataView;
 
-  private stringEncoded: Uint8Array;
-  private reified: PropertyValue[];
+  protected stringEncoded: Uint8Array;
+  protected stringsView: DataView;
+
+  protected reified: PropertyValue[];
 
   constructor(initialState: ColumnBytes) {
     this.byteOffset = initialState.byteOffset;
@@ -99,6 +101,7 @@ export class ByteColumn {
     this.length = initialState.length;
 
     this.stringEncoded = new Uint8Array(initialState.stringBuffer);
+    this.stringsView = new DataView(this.stringEncoded.buffer);
     this.buffer = initialState.buffer;
 
     this.typesView = new DataView(this.buffer, 0, initialState.length);
@@ -137,7 +140,7 @@ export class ByteColumn {
     throw new Error(`unknown value type for ${value}`);
   };
 
-  getValue = (index: number): PropertyValue => {
+  getValue(index: number): PropertyValue {
     const type = this.typesView.getUint8(index) as PropertyValueType;
 
     switch (type) {
@@ -157,12 +160,11 @@ export class ByteColumn {
         return undefined;
       }
     }
-  };
+  }
 
   setValue(index: number, value: PropertyValue) {
     const i = index | 0;
     const safeType = ByteColumn.getValueType(value) | 0;
-    this.reified[i] = value;
 
     switch (safeType) {
       case PropertyValueType.String: {
@@ -201,28 +203,32 @@ export class ByteColumn {
       offsetsView,
       valueView,
       typesView,
+      stringsView,
     } = this;
 
-    const bytesWritten = utf8EncodeJs(value, stringEncoded, start);
+    const bytesWritten = utf8EncodeJs(value, stringEncoded, start + 4);
+    // const bytesWritten = 0;
+    stringsView.setUint32(start, bytesWritten);
 
     valueView.setUint32(byteStart, start);
-    valueView.setUint32(byteStart + 4, bytesWritten);
     offsetsView.setUint32(index * 4, byteStart);
 
-    this.byteOffset += 8;
-    this.stringOffset += bytesWritten;
+    this.byteOffset += 4;
+    this.stringOffset += bytesWritten + 4;
 
     typesView.setUint8(index, PropertyValueType.String);
   }
 
   getString(index: number): string {
-    const { stringEncoded, valueView: view } = this;
-    const start = view.getUint32(this.offsetsView.getUint32(index * 4));
-    const byteLength = view.getUint32(
-      this.offsetsView.getUint32(index * 4) + 4
-    );
+    const { stringsView, stringEncoded, valueView: view, offsetsView } = this;
+    const start = view.getUint32(offsetsView.getUint32(index * 4));
+    const byteLength = stringsView.getUint32(start);
 
-    return utf8DecodeJs(stringEncoded, start, byteLength >= 0 ? byteLength : 0);
+    return utf8DecodeJs(
+      stringEncoded,
+      start + 4,
+      byteLength >= 0 ? byteLength : 0
+    );
   }
 
   setNumber(index: number, value: number) {
@@ -271,46 +277,75 @@ export class ByteColumn {
   }
 }
 
-// export const execTests = async () => {
-//   const s0 = Date.now();
-//   const data = makeData(300000);
-//   const e0 = Date.now();
-//   console.log(`make data ${e0 - s0}`);
+export class DictionaryByteColumn extends ByteColumn {
+  static fromColumnBytes(jsonColumn: ColumnBytes): DictionaryByteColumn {
+    return new DictionaryByteColumn(jsonColumn);
+  }
 
-//   const sc = Date.now();
-//   data.slice();
-//   const ec = Date.now();
-//   console.log(`clone data ${ec - sc}`);
+  static fromArray(values: PropertyValue[]): DictionaryByteColumn {
+    const column = new DictionaryByteColumn(createColumnBytes(values.length));
+    for (let i = 0; i < values.length; i++) {
+      column.setValue(i, values[i]);
+    }
 
-//   const s = Date.now();
-//   const col = Column.fromArray(data);
-//   const e = Date.now();
-//   console.log(`init ${e - s}`);
+    return column;
+  }
+  dictionary: Record<string, number> = {};
+  decodeCache: string[] = [];
 
-//   const s1 = Date.now();
-//   const colBytes = col.toColumnBytes();
-//   const e1 = Date.now();
-//   console.log(`to bytes ${e1 - s1}`);
+  getString(index: number): string {
+    const {
+      decodeCache,
+      stringsView,
+      stringEncoded,
+      valueView: view,
+      offsetsView,
+    } = this;
 
-//   // await sleep(4000)
-//   const s2 = Date.now();
-//   const cloned = await promisePostMessage(colBytes, [
-//     colBytes.stringBuffer,
-//     colBytes.buffer,
-//   ]);
-//   const e2 = Date.now();
-//   console.log(`postmessage compressed ${e2 - s2}`);
+    const start = view.getUint32(offsetsView.getUint32(index * 4));
+    if (decodeCache[start] !== undefined) {
+      return decodeCache[start];
+    }
 
-//   // await sleep(4000)
-//   const s3 = Date.now();
-//   await promisePostMessage(data);
-//   const e3 = Date.now();
-//   console.log(`postmessage full ${e3 - s3}`);
+    const byteLength = stringsView.getUint32(start);
+    return (decodeCache[start] = utf8DecodeJs(
+      stringEncoded,
+      start + 4,
+      byteLength >= 0 ? byteLength : 0
+    ));
+  }
 
-//   const s4 = Date.now();
-//   const reified = Column.fromColumnBytes(cloned).reify();
-//   const e4 = Date.now();
-//   console.log(`reify data ${e4 - s4}`);
+  setString(index: number, value: string): void {
+    const {
+      stringEncoded,
+      stringOffset: start,
+      byteOffset: byteStart,
+      offsetsView,
+      valueView,
+      typesView,
+      stringsView,
+    } = this;
 
-//   assertEqual(reified, data);
-// };
+    typesView.setUint8(index, PropertyValueType.String);
+
+    const cachedIndex = this.dictionary[value];
+    if (cachedIndex !== undefined) {
+      valueView.setUint32(byteStart, cachedIndex);
+      offsetsView.setUint32(index * 4, byteStart);
+
+      this.byteOffset += 4;
+
+      return;
+    }
+
+    this.dictionary[value] = start;
+    const bytesWritten = utf8EncodeJs(value, stringEncoded, start + 4);
+    stringsView.setUint32(start, bytesWritten);
+
+    valueView.setUint32(byteStart, start);
+    offsetsView.setUint32(index * 4, byteStart);
+
+    this.byteOffset += 4;
+    this.stringOffset += bytesWritten + 4;
+  }
+}

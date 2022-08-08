@@ -1,6 +1,6 @@
-import { initTimer, Timer } from "./timings";
+import { initTimer } from "./timings";
 import { makeData } from "./makeData";
-import { ByteColumn } from "./ByteColumn";
+import { DictionaryByteColumn, ByteColumn } from "./ByteColumn";
 import { RequestMessageData } from "./types";
 
 self.addEventListener(
@@ -23,6 +23,31 @@ self.addEventListener(
 
         timer.time("get column bytes");
         const bytePayload = byteColumn.toColumnBytes();
+        timer.timeEnd("get column bytes");
+
+        postMessage(
+          {
+            type: message.type,
+            payload: bytePayload,
+            timings: timer.timings,
+            messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+          },
+          {
+            transfer: [bytePayload.buffer, bytePayload.stringBuffer],
+          }
+        );
+
+        break;
+      }
+
+      case "roundTripDict": {
+        timer.time("init byte column");
+        const byteColumn = ByteColumn.fromArray(data);
+        timer.timeEnd("init byte column");
+
+        const dictByteColumn = DictionaryByteColumn.fromArray(data);
+        timer.time("get column bytes");
+        const bytePayload = dictByteColumn.toColumnBytes();
         timer.timeEnd("get column bytes");
 
         postMessage(
