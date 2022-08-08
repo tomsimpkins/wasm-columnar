@@ -10,6 +10,7 @@ const createColumnBytes = (length: number): ColumnBytes => {
   return {
     stringBuffer: new Uint8Array(length * 50),
     buffer: new ArrayBuffer(length + 4 * length + 8 * length), // types + offsets + values
+    stringCount: 0,
     byteOffset: 0,
     stringOffset: 0,
     length,
@@ -22,13 +23,14 @@ type ColumnBytes = {
 
   byteOffset: number;
   stringOffset: number;
+  stringCount: number;
 
   length: number;
 };
 
 export class ByteColumn {
-  static fromColumnBytes(jsonColumn: ColumnBytes): ByteColumn {
-    return new ByteColumn(jsonColumn);
+  static fromColumnBytes(columnBytes: ColumnBytes): ByteColumn {
+    return new ByteColumn(columnBytes);
   }
 
   toColumnBytes(): ColumnBytes {
@@ -36,8 +38,9 @@ export class ByteColumn {
       stringBuffer: this.stringEncoded.buffer.slice(0),
       buffer: this.buffer.slice(0),
 
-      byteOffset: this.byteOffset,
-      stringOffset: this.stringOffset,
+      stringCount: this.stringCount,
+      byteOffset: this.valueByteOffset,
+      stringOffset: this.stringByteOffset,
       length: this.length,
     };
   }
@@ -81,8 +84,8 @@ export class ByteColumn {
     }
   }
 
-  protected byteOffset: number;
-  protected stringOffset: number;
+  protected valueByteOffset: number;
+  protected stringByteOffset: number;
   protected length: number;
 
   protected buffer: ArrayBuffer;
@@ -92,12 +95,14 @@ export class ByteColumn {
 
   protected stringEncoded: Uint8Array;
   protected stringsView: DataView;
+  protected stringCount: number;
 
   protected reified: PropertyValue[];
 
   constructor(initialState: ColumnBytes) {
-    this.byteOffset = initialState.byteOffset;
-    this.stringOffset = initialState.stringOffset;
+    this.valueByteOffset = initialState.byteOffset;
+    this.stringByteOffset = initialState.stringOffset;
+    this.stringCount = initialState.stringCount;
     this.length = initialState.length;
 
     this.stringEncoded = new Uint8Array(initialState.stringBuffer);
@@ -198,8 +203,8 @@ export class ByteColumn {
   setString(index: number, value: string) {
     const {
       stringEncoded,
-      stringOffset: start,
-      byteOffset: byteStart,
+      stringByteOffset: start,
+      valueByteOffset: byteStart,
       offsetsView,
       valueView,
       typesView,
@@ -213,8 +218,8 @@ export class ByteColumn {
     valueView.setUint32(byteStart, start);
     offsetsView.setUint32(index * 4, byteStart);
 
-    this.byteOffset += 4;
-    this.stringOffset += bytesWritten + 4;
+    this.valueByteOffset += 4;
+    this.stringByteOffset += bytesWritten + 4;
 
     typesView.setUint8(index, PropertyValueType.String);
   }
@@ -230,13 +235,17 @@ export class ByteColumn {
       byteLength >= 0 ? byteLength : 0
     );
   }
-
   setNumber(index: number, value: number) {
-    const { typesView, valueView, offsetsView, byteOffset: offsetStart } = this;
+    const {
+      typesView,
+      valueView,
+      offsetsView,
+      valueByteOffset: offsetStart,
+    } = this;
 
     valueView.setFloat64(offsetStart, value);
     offsetsView.setUint32(index * 4, offsetStart);
-    this.byteOffset += 8;
+    this.valueByteOffset += 8;
 
     typesView.setUint8(index, PropertyValueType.Number);
   }
@@ -246,11 +255,16 @@ export class ByteColumn {
   }
 
   setDate(index: number, value: Date) {
-    const { valueView, offsetsView, byteOffset: startOffset, typesView } = this;
+    const {
+      valueView,
+      offsetsView,
+      valueByteOffset: startOffset,
+      typesView,
+    } = this;
 
     valueView.setUint32(startOffset, encodeDate(value));
     offsetsView.setUint32(index * 4, startOffset);
-    this.byteOffset += 4;
+    this.valueByteOffset += 4;
 
     typesView.setUint8(index, PropertyValueType.Date);
   }
@@ -262,12 +276,17 @@ export class ByteColumn {
   }
 
   setBoolean(index: number, value: boolean) {
-    const { byteOffset: startOffset, valueView, offsetsView, typesView } = this;
+    const {
+      valueByteOffset: startOffset,
+      valueView,
+      offsetsView,
+      typesView,
+    } = this;
 
     const v = value ? 1 : 0;
     valueView.setUint8(startOffset, v);
     offsetsView.setUint32(index * 4, startOffset);
-    this.byteOffset += 1;
+    this.valueByteOffset += 1;
 
     typesView.setUint8(index, PropertyValueType.Boolean);
   }
@@ -278,8 +297,8 @@ export class ByteColumn {
 }
 
 export class DictionaryByteColumn extends ByteColumn {
-  static fromColumnBytes(jsonColumn: ColumnBytes): DictionaryByteColumn {
-    return new DictionaryByteColumn(jsonColumn);
+  static fromColumnBytes(columnBytes: ColumnBytes): DictionaryByteColumn {
+    return new DictionaryByteColumn(columnBytes);
   }
 
   static fromArray(values: PropertyValue[]): DictionaryByteColumn {
@@ -318,8 +337,8 @@ export class DictionaryByteColumn extends ByteColumn {
   setString(index: number, value: string): void {
     const {
       stringEncoded,
-      stringOffset: start,
-      byteOffset: byteStart,
+      stringByteOffset: start,
+      valueByteOffset: byteStart,
       offsetsView,
       valueView,
       typesView,
@@ -333,7 +352,7 @@ export class DictionaryByteColumn extends ByteColumn {
       valueView.setUint32(byteStart, cachedIndex);
       offsetsView.setUint32(index * 4, byteStart);
 
-      this.byteOffset += 4;
+      this.valueByteOffset += 4;
 
       return;
     }
@@ -345,7 +364,86 @@ export class DictionaryByteColumn extends ByteColumn {
     valueView.setUint32(byteStart, start);
     offsetsView.setUint32(index * 4, byteStart);
 
-    this.byteOffset += 4;
-    this.stringOffset += bytesWritten + 4;
+    this.valueByteOffset += 4;
+    this.stringByteOffset += bytesWritten + 4;
+  }
+}
+
+export class BatchByteColumn extends ByteColumn {
+  static fromColumnBytes(columnBytes: ColumnBytes): BatchByteColumn {
+    return new BatchByteColumn(columnBytes);
+  }
+
+  static fromArray(values: PropertyValue[]): BatchByteColumn {
+    const column = new BatchByteColumn(createColumnBytes(values.length));
+    for (let i = 0; i < values.length; i++) {
+      column.setValue(i, values[i]);
+    }
+
+    return column;
+  }
+
+  decoder = new TextDecoder();
+  encoder = new TextEncoder();
+
+  decodeCache: string[];
+  encodeCache: string[] = [];
+
+  toColumnBytes(): ColumnBytes {
+    const r = this.encoder.encodeInto(
+      this.encodeCache.join("|"),
+      this.stringEncoded
+    );
+
+    return {
+      stringBuffer: this.stringEncoded.slice(0, r.written).buffer,
+      buffer: this.buffer.slice(0),
+
+      stringCount: this.stringCount,
+      byteOffset: this.valueByteOffset,
+      stringOffset: this.stringByteOffset,
+      length: this.length,
+    };
+  }
+
+  // byte offsets encoding
+  setString(index: number, value: string) {
+    const {
+      stringEncoded,
+      stringByteOffset: stringByteStart,
+      valueByteOffset: valueByteStart,
+      offsetsView,
+      valueView,
+      typesView,
+      stringsView,
+      stringCount,
+    } = this;
+
+    this.encodeCache[this.stringCount] = value;
+
+    valueView.setUint32(valueByteStart, stringCount | 0);
+    offsetsView.setUint32(index * 4, valueByteStart | 0);
+    this.valueByteOffset += 4;
+    this.stringCount += 1;
+
+    typesView.setUint8(index, PropertyValueType.String);
+  }
+
+  getString(index: number): string {
+    const { stringsView, stringEncoded, valueView: view, offsetsView } = this;
+    const valueIndex = offsetsView.getUint32(index * 4);
+    const stringIndex = view.getUint32(valueIndex);
+
+    if (!this.decodeCache) {
+      this.decodeCache = this.decoder.decode(stringEncoded).split("|");
+    }
+
+    return this.decodeCache[stringIndex];
+  }
+}
+
+export class Foobar extends ByteColumn {
+  setString(index: number, value: string) {
+    return super.setString(index, value);
   }
 }

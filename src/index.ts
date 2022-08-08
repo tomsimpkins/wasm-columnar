@@ -1,7 +1,11 @@
 import { initTimer } from "./timings";
 import { isEqual } from "./assert";
 import { makeData } from "./makeData";
-import { DictionaryByteColumn, ByteColumn } from "./ByteColumn";
+import {
+  DictionaryByteColumn,
+  ByteColumn,
+  BatchByteColumn,
+} from "./ByteColumn";
 import WebWorker from "web-worker:./Worker.ts";
 import {
   RequestMessageData,
@@ -13,7 +17,7 @@ import {
 const sleep = (ms: number): Promise<void> =>
   new Promise((res) => setTimeout(() => res(undefined), ms));
 
-const itemCount = 300000;
+const itemCount = 500000;
 const seed = 5;
 const types: PropertyValueType[] = [PropertyValueType.String];
 
@@ -57,6 +61,17 @@ async function main(): Promise<void> {
           break;
         }
 
+        case "roundTripBatch": {
+          timer.time("reify column");
+          const byteColumn = BatchByteColumn.fromColumnBytes(evt.data.payload);
+          const reified = byteColumn.reify();
+          timer.timeEnd("reify column");
+
+          result = reified;
+
+          break;
+        }
+
         case "roundTripRaw": {
           result = evt.data.payload;
           break;
@@ -87,25 +102,32 @@ async function main(): Promise<void> {
   worker.postMessage(initMessage);
 
   await sleep(1000);
-  const jsonMessage: RequestMessageData = {
-    type: "roundTripJson",
+  const batchByteColumnMessage: RequestMessageData = {
+    type: "roundTripBatch",
     args: [{ itemCount, seed, types }],
   };
-  worker.postMessage(jsonMessage);
+  worker.postMessage(batchByteColumnMessage);
 
-  await sleep(1000);
-  const byteColumnMessage: RequestMessageData = {
-    type: "roundTrip",
-    args: [{ itemCount, seed, types }],
-  };
-  worker.postMessage(byteColumnMessage);
+  // await sleep(1000);
+  // const jsonMessage: RequestMessageData = {
+  //   type: "roundTripJson",
+  //   args: [{ itemCount, seed, types }],
+  // };
+  // worker.postMessage(jsonMessage);
 
-  await sleep(1000);
-  const dictByteColumnMessage: RequestMessageData = {
-    type: "roundTripDict",
-    args: [{ itemCount, seed, types }],
-  };
-  worker.postMessage(dictByteColumnMessage);
+  // await sleep(1000);
+  // const byteColumnMessage: RequestMessageData = {
+  //   type: "roundTrip",
+  //   args: [{ itemCount, seed, types }],
+  // };
+  // worker.postMessage(byteColumnMessage);
+
+  // await sleep(1000);
+  // const dictByteColumnMessage: RequestMessageData = {
+  //   type: "roundTripDict",
+  //   args: [{ itemCount, seed, types }],
+  // };
+  // worker.postMessage(dictByteColumnMessage);
 
   await sleep(1000);
   const baselineMessage: RequestMessageData = {

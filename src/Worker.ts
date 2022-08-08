@@ -1,6 +1,11 @@
 import { initTimer } from "./timings";
 import { makeData } from "./makeData";
-import { DictionaryByteColumn, ByteColumn } from "./ByteColumn";
+import {
+  DictionaryByteColumn,
+  ByteColumn,
+  BatchByteColumn,
+  Foobar,
+} from "./ByteColumn";
 import { RequestMessageData } from "./types";
 
 self.addEventListener(
@@ -48,6 +53,30 @@ self.addEventListener(
         const dictByteColumn = DictionaryByteColumn.fromArray(data);
         timer.time("get column bytes");
         const bytePayload = dictByteColumn.toColumnBytes();
+        timer.timeEnd("get column bytes");
+
+        postMessage(
+          {
+            type: message.type,
+            payload: bytePayload,
+            timings: timer.timings,
+            messageSendTime: Date.now(), // cannot use performance.now because performance is measured from isolate instantiation
+          },
+          {
+            transfer: [bytePayload.buffer, bytePayload.stringBuffer],
+          }
+        );
+
+        break;
+      }
+
+      case "roundTripBatch": {
+        timer.time("init byte column");
+        const byteColumn = BatchByteColumn.fromArray(data);
+        timer.timeEnd("init byte column");
+
+        timer.time("get column bytes");
+        const bytePayload = byteColumn.toColumnBytes();
         timer.timeEnd("get column bytes");
 
         postMessage(

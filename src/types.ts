@@ -19,6 +19,7 @@ export type RequestMessageData =
         | { type: "roundTripRaw" }
         | { type: "roundTripJson" }
         | { type: "roundTripDict" }
+        | { type: "roundTripBatch" }
       ))
   | InitMessage;
 
@@ -42,5 +43,8 @@ export type ResponseMessageData = BaseResponseMessageData &
       }
     | {
         type: "roundTripDict";
+      }
+    | {
+        type: "roundTripBatch";
       }
   );
