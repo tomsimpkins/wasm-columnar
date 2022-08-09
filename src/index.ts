@@ -13,6 +13,7 @@ import {
   PropertyValueType,
   ResponseMessageData,
 } from "./types";
+import { initWasm, compact } from "./compactStrings";
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((res) => setTimeout(() => res(undefined), ms));
@@ -22,6 +23,9 @@ const seed = 5;
 const types: PropertyValueType[] = [PropertyValueType.String];
 
 async function main(): Promise<void> {
+  await initWasm();
+  compact();
+
   const worker = new WebWorker();
 
   worker.addEventListener(
